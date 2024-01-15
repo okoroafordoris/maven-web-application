@@ -1,0 +1,77 @@
+pipeline {
+    agent any
+    tools {
+        maven 'maven3.9.6'
+    }
+    //options{}
+    //triggers {}
+    stages {
+    stage('1.CloneCode'){
+        steps{
+            sh "echo Cloning the latest application version"
+            git "https://github.com/okoroafordoris/maven-web-application.git"
+            sh "echo Cloning successful"
+        }
+    }
+    stage('2.mvnBuild'){
+        steps{
+            sh "${MAVEN_HOME}/bin/mvn package"
+        }
+    }
+    stage('3.CodeQuality'){
+        steps{
+            sh "${MAVEN_HOME}/bin/mvn sonar:sonar"
+        // edit pom.xml propertiesTAG with SonarQube server details
+        }
+    }
+    stage('4.UploadArtifacts'){
+        steps{
+            sh "${MAVEN_HOME}/bin/mvn deploy"
+        }
+    }
+    stage('5.Deploy2UAT'){
+        steps{
+            sh "echo Deployment is ready for the client review"
+            deploy adapters: [tomcat9(credentialsId: 'tomcat-credential', path: '', url: 'http://3.10.154.33:8080/')], contextPath: null, war: 'target/*war'
+        }
+    }
+    stage('6.ManualApproval'){
+        steps{
+            sh "echo Review the application and confirm its performance within 5 hours"
+      timeout(time:5, unit:'HOURS') {
+          input message: 'Application ready for deployment, Please review and approve'
+        }
+        }
+    }
+
+    stage('7.Deploy2Prod'){
+        steps{
+            sh "echo application reviewed, approved and ready for the market"
+            deploy adapters: [tomcat9(credentialsId: 'tomcat-credential', path: '', url: 'http://3.10.154.33:8080/')], contextPath: null, war: 'target/*war'
+        }
+    }
+        }
+    post {
+    always{
+        emailext body: '''Hi,
+
+Build status
+
+Doris Okoroafor''', recipientProviders: [buildUser(), developers(), requestor()], subject: 'Build Status', to: 'doris@djaccountingsolutions.co.uk'
+    }
+    success{
+        emailext body: '''Hi,
+
+Build successful
+
+Doris Okoroafor''', recipientProviders: [buildUser(), developers(), requestor()], subject: 'Build Status', to: 'doris@djaccountingsolutions.co.uk'
+    }
+    failure{
+        emailext body: '''Hi,
+
+Build failed
+
+Doris Okoroafor''', recipientProviders: [buildUser(), developers(), requestor()], subject: 'Build Status', to: 'doris@djaccountingsolutions.co.uk'
+    }
+}
+}
